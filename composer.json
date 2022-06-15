@@ -1,0 +1,16 @@
+{
+  "name": "jjsty1e/laravel-query-builder",
+  "description": "A better way to query the database with laravel",
+  "type": "library",
+  "require": {
+    "php": ">=7.2",
+    "laravel/framework": "^5.5|^6.0|^7.0|^8.0|^9.0"
+  },
+  "license": "MIT",
+  "autoload": {
+    "psr-4": {
+      "Jjsty1e\\LaravelQueryBuilder\\": "src/"
+    }
+  },
+  "minimum-stability": "stable"
+}

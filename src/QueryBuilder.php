@@ -1,16 +1,17 @@
 <?php
 
-namespace QueryBuilder\QueryBuilder;
+namespace Jjsty1e\LaravelQueryBuilder;
 
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Support\Str;
-use QueryBuilder\Exceptions\ValidationFailedException;
+use Jjsty1e\LaravelQueryBuilder\Definition as Def;
+use Jjsty1e\LaravelQueryBuilder\Exceptions\ValidationFailedException;
 
 class QueryBuilder
 {
-    use Utils\HasPaginates;
+    use HasPaginates;
 
     private $modelName;
 
@@ -50,7 +51,7 @@ class QueryBuilder
      * @param $withTrashed
      * @return $this
      */
-    public function setWithTrashed($withTrashed)
+    public function setWithTrashed($withTrashed): self
     {
         if ($withTrashed) {
             $this->builder->withoutGlobalScope(new SoftDeletingScope());
@@ -58,13 +59,16 @@ class QueryBuilder
         return $this;
     }
 
-    public function setCondition(array $condition)
+    public function setCondition(array $condition): self
     {
         $this->condition = $condition;
         return $this;
     }
 
-    public function query(array $params)
+    /**
+     * @throws ValidationFailedException
+     */
+    public function query(array $params): array
     {
         $this->builder = $this->getQueryBuilder($params);
         foreach ($this->getOrderBy() as $field => $direction) {
@@ -75,7 +79,10 @@ class QueryBuilder
             : $this->paginate($this->builder, $this->getPaginate($params));
     }
 
-    public function queryAll(array $params)
+    /**
+     * @throws ValidationFailedException
+     */
+    public function queryAll(array $params): array
     {
         $this->builder = $this->getQueryBuilder($params);
 
@@ -93,6 +100,7 @@ class QueryBuilder
      *
      * @param $params
      * @return Builder|Model
+     * @throws ValidationFailedException
      */
     public function first($params)
     {
@@ -117,7 +125,7 @@ class QueryBuilder
      * @return Builder
      * @throws
      */
-    public function getQueryBuilder(array $params)
+    public function getQueryBuilder(array $params): Builder
     {
         $params = $this->trimString($params);
 
@@ -137,7 +145,7 @@ class QueryBuilder
                 continue;
             }
             if ($autoInspect) {
-                $type = is_array($param) ? ConditionDefinition::TERMS : ConditionDefinition::TERM;
+                $type = is_array($param) ? Def::TERMS : Def::TERM;
             }
             if (is_scalar($param) && strlen($param) === 0) {
                 continue;
@@ -145,33 +153,28 @@ class QueryBuilder
             if (is_array($param) && count($param) === 0) {
                 continue;
             }
-            if (is_array($param) && !in_array($type, [ConditionDefinition::TERMS, ConditionDefinition::RANGE])) {
-                throw new ValidationFailedException("params {$field} format invalid");
+            if (is_array($param) && !in_array($type, [Def::TERMS, Def::RANGE])) {
+                throw new ValidationFailedException("params $field format invalid");
             }
-            if (Str::contains($field, '.')) {
-                [$scope] = explode('.', $field);
-                $this->useScope($scope);
-                // 对于关联查询，字段中已经包含表的名字
-                $sqlField = $field;
-            } else {
-                // sql中指定表名，避免在连表时出现字段名冲突
-                $sqlField = $this->builder->getModel()->getTable() . '.' . $field;
-            }
+
+            // sql中指定表名，避免在连表时出现字段名冲突
+            $sqlField = $this->builder->getModel()->getTable() . '.' . $field;
+
             switch ($type) {
-                case ConditionDefinition::TERM:
+                case Def::TERM:
                 default:
                     $this->builder->where($sqlField, $param);
                     break;
-                case ConditionDefinition::TERMS:
+                case Def::TERMS:
                     if (!is_array($param)) {
                         $param = explode(',', $param);
                     }
                     $this->builder->whereIn($sqlField, $param);
                     break;
-                case ConditionDefinition::FUZZY:
-                    $this->builder->where($sqlField, 'LIKE', "%{$param}%");
+                case Def::FUZZY:
+                    $this->builder->where($sqlField, 'LIKE', "%$param%");
                     break;
-                case ConditionDefinition::RANGE:
+                case Def::RANGE:
                     if (is_array($param)) {
                         if (isset($param[0])) {
                             $this->builder->where($sqlField, '>=', $param[0]);
@@ -209,7 +212,7 @@ class QueryBuilder
      *
      * @return array
      */
-    protected function getOrderBy()
+    protected function getOrderBy(): array
     {
         $newVal = [];
         foreach ($this->orderBy as $field => $direction) {
@@ -221,7 +224,7 @@ class QueryBuilder
         return $newVal;
     }
 
-    public function orderBy(array $sorts)
+    public function orderBy(array $sorts): self
     {
         $this->orderBy = $sorts;
         return $this;
@@ -235,7 +238,7 @@ class QueryBuilder
      * @param array $params
      * @return array
      */
-    protected function getPaginate(array $params)
+    protected function getPaginate(array $params): array
     {
         return $this->getPageNoPageSize($params);
     }
@@ -252,7 +255,7 @@ class QueryBuilder
     private function applyJoinTables()
     {
         foreach ($this->joinToModels as $joinTo) {
-            list($joinTo, $localKey) = (array)$joinTo;
+            [$joinTo, $localKey] = (array)$joinTo;
             /** @var Model $other */
             $other = new $joinTo;
 
@@ -267,7 +270,7 @@ class QueryBuilder
         }
 
         foreach ($this->joinFromModels as $joinFrom) {
-            list($joinFrom, $otherKey) = (array)$joinFrom;
+            [$joinFrom, $otherKey] = (array)$joinFrom;
             /** @var Model $other */
             $other = new $joinFrom;
 
@@ -289,12 +292,12 @@ class QueryBuilder
      *
      * @return array
      */
-    protected function getConditionDefinition()
+    protected function getConditionDefinition(): array
     {
         return $this->condition;
     }
 
-    private function trimString(array $params)
+    private function trimString(array $params): array
     {
         foreach ($params as &$val) {
             if (is_string($val)) {
@@ -324,42 +327,26 @@ class QueryBuilder
         $this->builder->select($select);
     }
 
-    public function addSelect($select)
+    public function addSelect($select): QueryBuilder
     {
         $select = is_array($select) ? $select : func_get_args();
         $this->addedSelect = array_merge($this->addedSelect, $select);
-        foreach ($select as $field) {
-            if (Str::contains($field, '.')) {
-                [$scope] = explode('.', $field);
-                $this->useScope($scope);
-            }
-        }
         return $this;
     }
 
-    public function useScope($scopes)
-    {
-        $scopes = is_array($scopes) ? $scopes : func_get_args();
-        $scopes = array_map(function ($item) {
-            return Str::camel($item);
-        }, $scopes);
-        $this->usingScope = array_unique(array_merge($this->usingScope, $scopes));
-        return $this;
-    }
-
-    public function apply(callable $applier)
+    public function apply(callable $applier): self
     {
         $this->applier = $applier;
         return $this;
     }
 
-    public function with(array $relations)
+    public function with(array $relations): self
     {
         $this->builder->with($relations);
         return $this;
     }
 
-    public function groupBy($field)
+    public function groupBy($field): self
     {
         $this->groupBy = $field;
         return $this;
@@ -369,7 +356,7 @@ class QueryBuilder
      * 从当前(a)表连接至其他(b)表：a.b_id = b.id
      * 其中 a.b_id 是 b 表中的主键
      */
-    public function joinTo($model, $localKey = null)
+    public function joinTo($model, $localKey = null): self
     {
         $this->joinToModels[] = [$model, $localKey];
 
@@ -380,7 +367,7 @@ class QueryBuilder
      * 从其他(b)表连接至当前(a)表：a.id = b.a_id
      * 其中 b.a_id 是 a 的主键
      */
-    public function joinFrom($model, $otherKey = null)
+    public function joinFrom($model, $otherKey = null): self
     {
         $this->joinFromModels[] = [$model, $otherKey];
 
